@@ -7,10 +7,47 @@ This tutorial shows how to use **random search** (Bergstra and Bengio 2012) for 
 
 We focus on generating level-one data for a multinomial classification dataset from a famous [Kaggle](https://www.kaggle.com/) challenge, the [Otto Group Product Classification](https://www.kaggle.com/c/otto-group-product-classification-challenge) challenge. The dataset contains 61878 training instances and 144368 test instances on 93 numerical features. There are 9 categories for all data instances.
 
-All experiments are conducted in a **64-bit Ubuntu 16.04.1 LTS** machine with **Intel Core i7-6700HQ 2.60GHz** and **16GB RAM DDR4**. We use `R` version **3.3.1** and `h2o` package version **3.10.0.9**.
+All experiments were conducted in a **64-bit Ubuntu 16.04.1 LTS** machine with **Intel Core i7-6700HQ 2.60GHz** and **16GB RAM DDR4**. We use `R` version **3.3.1** and `h2o` package version **3.10.0.9**.
+
+The source code and all output files are available on [GitHub](https://github.com/davpinto/h2o-tutorial).
+
+Repository Structure
+--------------------
+
+When you are conducting a big experiment it's very important to use a clear and robust repository structure, as follows:
+
+    root
+    │   README.md
+    │   project-name.Rproj
+    │
+    └── data
+    │   │  train.csv.zip
+    │   │  test.csv.zip
+    │   │  main.R 
+    │   │...
+    │   
+    └── gbm
+    │   │  main.R
+    │   │  gbm_output.csv.zip
+    │   │  gbm_model
+    │   │...
+    │
+    └── glm
+    │   │  main.R
+    │   │  glm_output.csv.zip
+    │   │  glm_model
+    │   │...
+    │
+    ...
+
+In the `root` directory we save a `README.md` file describing the experiment, and a [RStudio project](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects) if we are using the **RStudio IDE** (strong recommended). In the `data` folder we save the data files and a `R` script to read them to the memory. Then we create a separated folder for each machine learning algorithm, where we store the `R` scripts to run it and the generated outputs like predictions and fitted models.
 
 Split Data in k-Folds
 ---------------------
+
+The first step is to split data in folds. We will use k-fold cross-validation for **parameter tuning** and then to generate **level-one** data to be used in the **stacking** step. All algorithms will use the same fold ids. So, we generate them using the `caret` package and save the results in the `./data/` folder. Here we use `k = 5`.
+
+We have fixed the random generator with `set.seed(2020)` to allow reproducibility.
 
 ``` r
 ## Load required packages
@@ -66,13 +103,12 @@ h2o.colnames(train.hex)
 Tuning GBM
 ----------
 
-### Random Search
+For more details about GBM parameters take a look at this tutorial [Complete Guide to Parameter Tuning in Gradient Boosting (GBM) in Python](https://www.analyticsvidhya.com/blog/2016/02/complete-guide-parameter-tuning-gradient-boosting-gbm-python/). There is also a great tutorial showing how to build a well-tuned H2O GBM model, the [H2O GBM Tuning Tutorial for R](http://blog.h2o.ai/2016/06/h2o-gbm-tuning-tutorial-for-r/).
+
+### Random Parameter Search
 
 ``` r
 ## Random search for parameter tuning
-## *** References: 
-## 1. https://www.analyticsvidhya.com/blog/2016/02/complete-guide-parameter-tuning-gradient-boosting-gbm-python/
-## 2. http://blog.h2o.ai/2016/06/h2o-gbm-tuning-tutorial-for-r/
 gbm.params <- list(
    max_depth = seq(2, 24, by = 2),
    min_rows = seq(10, 150, by = 10),                 # minimum observations required in a terminal node or leaf
@@ -115,13 +151,13 @@ save(best.params, file = "./gbm/best_params.rda", compress = "bzip2")
 head(grid.table, 5)
 ```
 
-| col\_sample\_rate | col\_sample\_rate\_per\_tree | histogram\_type | max\_depth | min\_rows | nbins | sample\_rate | model\_ids          |  logloss|
-|:------------------|:-----------------------------|:----------------|:-----------|:----------|:------|:-------------|:--------------------|--------:|
-| 0.6               | 0.8                          | Random          | 10         | 20.0      | 35    | 0.6          | gbm\_grid\_model\_3 |   0.4705|
-| 0.6               | 0.7                          | RoundRobin      | 12         | 30.0      | 29    | 0.7          | gbm\_grid\_model\_4 |   0.4739|
-| 0.4               | 0.8                          | QuantilesGlobal | 12         | 50.0      | 20    | 0.4          | gbm\_grid\_model\_0 |   0.4828|
-| 0.6               | 1.0                          | UniformAdaptive | 16         | 140.0     | 16    | 0.3          | gbm\_grid\_model\_2 |   0.4918|
-| 0.8               | 0.9                          | QuantilesGlobal | 16         | 140.0     | 43    | 0.2          | gbm\_grid\_model\_1 |   0.5065|
+| col\_sample\_rate | col\_sample\_rate\_per\_tree | histogram\_type | max\_depth | min\_rows | nbins | sample\_rate | model\_ids           |  logloss|
+|:------------------|:-----------------------------|:----------------|:-----------|:----------|:------|:-------------|:---------------------|--------:|
+| 1.0               | 0.5                          | RoundRobin      | 14         | 70.0      | 35    | 0.8          | gbm\_grid\_model\_6  |   0.4643|
+| 0.3               | 0.7                          | Random          | 22         | 50.0      | 35    | 0.6          | gbm\_grid\_model\_15 |   0.4649|
+| 0.6               | 0.4                          | RoundRobin      | 10         | 70.0      | 24    | 1.0          | gbm\_grid\_model\_10 |   0.4767|
+| 0.8               | 1.0                          | UniformAdaptive | 24         | 60.0      | 35    | 0.4          | gbm\_grid\_model\_28 |   0.4792|
+| 1.0               | 0.8                          | RoundRobin      | 22         | 140.0     | 9     | 0.4          | gbm\_grid\_model\_14 |   0.4847|
 
 ### Generate Level-one Training Data
 
@@ -169,7 +205,7 @@ write.csv(
 
 ![GBM Leaderboard](./img/gbm_kaggle_lb.png)
 
-**Top 25%** with a single GBM model.
+**Top 20%** with a single GBM model.
 
 Tuning RandomForest
 -------------------
