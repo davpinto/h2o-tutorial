@@ -14,28 +14,48 @@ gbm.params <- list(
 gbm.grid <- h2o.grid(
    algorithm = "gbm", grid_id = "gbm_grid",
    x = input.names, y = label.name, training_frame = train.hex,
-   fold_column = "cv", distribution = "multinomial", ntrees = 500, 
+   fold_column = "cv", distribution = "multinomial", ntrees = 150, 
    learn_rate = 0.1, learn_rate_annealing = 0.995, 
    stopping_rounds = 2, stopping_metric = 'logloss', stopping_tolerance = 1e-5,
-   score_each_iteration = FALSE, score_tree_interval = 10,
+   score_each_iteration = FALSE, score_tree_interval = 15,
    keep_cross_validation_predictions = TRUE, 
-   seed = 2020, max_runtime_secs = 30 * 60,
+   seed = 2020, max_runtime_secs = 15 * 60,
    search_criteria = list(
-      strategy = "RandomDiscrete", max_models = 25, 
-      max_runtime_secs = 12 * 60 * 60, seed = 2020
+      strategy = "RandomDiscrete", max_models = 50, 
+      max_runtime_secs = 6 * 60 * 60, seed = 2020
    ),
    hyper_params = gbm.params
 )
 
-## Get best model
+## Get best parameters
 grid.table <- h2o.getGrid("gbm_grid", sort_by = "logloss", decreasing = FALSE)@summary_table
 save(grid.table, file = "./gbm/grid_table.rda", compress = "bzip2")
 best.gbm <- h2o.getModel(grid.table$model_ids[1])
 h2o.logloss(best.gbm@model$cross_validation_metrics)
 h2o.saveModel(best.gbm, path = "./gbm", force = TRUE)
-file.rename(from = paste("gbm", grid.table$model_ids[1], sep = "/"), to = "gbm/best_model")
+file.rename(from = paste("gbm", best.gbm@model_id, sep = "/"), to = "gbm/best_model")
 best.params <- best.gbm@allparameters
 save(best.params, file = "./gbm/best_params.rda", compress = "bzip2")
+
+## Train best model with more iterations
+load("./gbm/best_params.rda")
+best.gbm <- h2o.gbm(x = input.names, y = label.name, training_frame = train.hex,
+                    model_id = "best_model",
+                    fold_column = "cv", distribution = "multinomial", 
+                    ntrees = 500, learn_rate = 0.1, learn_rate_annealing = 0.995, 
+                    stopping_rounds = 2, stopping_metric = 'logloss', stopping_tolerance = 1e-5,
+                    score_each_iteration = FALSE, score_tree_interval = 15,
+                    keep_cross_validation_predictions = TRUE, seed = 2020, 
+                    max_depth = best.params$max_depth,
+                    min_rows = best.params$min_rows,
+                    sample_rate = best.params$sample_rate,
+                    col_sample_rate = best.params$col_sample_rate,
+                    col_sample_rate_per_tree = best.params$col_sample_rate_per_tree,
+                    nbins = best.params$nbins,
+                    histogram_type = best.params$histogram_type)
+h2o.logloss(best.gbm@model$cross_validation_metrics)
+best.gbm@parameters$ntrees
+h2o.saveModel(best.gbm, path = "./gbm", force = TRUE)
 
 ## Get predictions for the training cv folds
 var.names <- paste("gbm", 1:h2o.nlevels(train.hex[,label.name]), sep = "_")
