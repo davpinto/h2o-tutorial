@@ -2,7 +2,6 @@
 library("readr")
 library("xgboost")
 library("Matrix")
-library("magrittr")
 
 options(scipen = 999)
 
