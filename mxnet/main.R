@@ -139,6 +139,7 @@ for (i in seq(ensemble.size)) {
 }
 close(pb)
 pred.prob <- pred.prob / ensemble.size
+pred.prob <- round(pred.prob, 6)
 colnames(pred.prob) <- levels(y)
 pred.prob <- cbind.data.frame(id = te.data$id, pred.prob)
 write.csv(
